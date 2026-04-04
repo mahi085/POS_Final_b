@@ -44,24 +44,34 @@ export const registerUser = async (req, res) => {
 
 export const loginUser = async (req, res) => {
   try {
+    if (!req.body) {
+      return res.status(400).json({
+        success: false,
+        message: "Request body is missing."
+      });
+    }
 
     const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required."
+      });
+    }
 
     const user = await User.findOne({ email });
-
     if (!user) {
       return res.status(400).json({
-        success:false,
-        message:"Invalid email or password"
+        success: false,
+        message: "Invalid email or password"
       });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
-
     if (!isMatch) {
       return res.status(400).json({
-        success:false,
-        message:"Invalid email or password"
+        success: false,
+        message: "Invalid email or password"
       });
     }
 
@@ -72,16 +82,15 @@ export const loginUser = async (req, res) => {
     );
 
     res.status(200).json({
-      success:true,
+      success: true,
       token,
-      user:{
-        id:user._id,
-        name:user.name,
-        email:user.email
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email
       }
     });
-
   } catch (error) {
-    res.status(500).json({ message:error.message });
+    res.status(500).json({ message: error.message });
   }
 };
