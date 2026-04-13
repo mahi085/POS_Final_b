@@ -12,20 +12,33 @@ dotenv.config();
 
 const app = express();
 
+// ✅ FIXED CORS
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://pos-final-f-7nmd.onrender.com" // ✅ NO trailing slash
+];
+
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://pos-final-f-7nmd.onrender.com/",
-      "srv-d7efe628qa3s73bvjieg"
-    ],
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("❌ Not allowed by CORS: " + origin));
+      }
+    },
     credentials: true,
   })
 );
+
+// ✅ Handle preflight
+app.options("*", cors());
+
 app.use(express.json());
 
 connectDB();
 
+// routes
 app.use("/api/product", productRoutes);
 app.use("/api/sale", salesRoutes);
 app.use("/api/dashboard", dashboardRoutes);
@@ -34,8 +47,9 @@ app.use("/api/user", userRoutes);
 app.get("/", (req, res) => {
   res.send("POS Server Running");
 });
+
 const port = process.env.PORT || 3000;
 
 app.listen(port, () => {
-  console.log("Server running on port 3000");
+  console.log(`Server running on port ${port}`);
 });
