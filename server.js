@@ -12,44 +12,50 @@ dotenv.config();
 
 const app = express();
 
-// ✅ FIXED CORS
+// ✅ Allowed frontend URLs
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://pos-final-f-7nmd.onrender.com" // ✅ NO trailing slash
+  "https://pos-final-f-7nmd.onrender.com"
 ];
 
+// ✅ CORS FIX (no crash, no wildcard issues)
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
+      // allow requests with no origin (like Postman)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
       } else {
-        callback(new Error("❌ Not allowed by CORS: " + origin));
+        console.log("❌ Blocked by CORS:", origin);
+        return callback(new Error("Not allowed by CORS"));
       }
     },
     credentials: true,
   })
 );
 
-// ✅ Handle preflight
-app.options("*", cors());
-
+// ✅ Middleware
 app.use(express.json());
 
+// ✅ Connect DB
 connectDB();
 
-// routes
+// ✅ Routes
 app.use("/api/product", productRoutes);
 app.use("/api/sale", salesRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/user", userRoutes);
 
+// ✅ Health check
 app.get("/", (req, res) => {
-  res.send("POS Server Running");
+  res.send("POS Server Running 🚀");
 });
 
+// ✅ Start server
 const port = process.env.PORT || 3000;
 
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  console.log(`✅ Server running on port ${port}`);
 });
