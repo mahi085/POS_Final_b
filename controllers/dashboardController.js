@@ -61,7 +61,7 @@ export const getDailyProductsSold = async (req, res) => {
 export const getLowStockProducts = async (req, res) => {
   try {
 
-    const products = await Product.find({
+    const products = await ProductModel.find({
       $expr: { $lte: ["$stockQuantity", "$lowStockAlert"] }
     }).select("name stockQuantity lowStockAlert barcode");
 
@@ -115,68 +115,96 @@ export const getSalesChart = async (req, res) => {
 
 export const getDashboardStats = async (req, res) => {
   try {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
 
-    /* TODAY RANGE */
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
 
-    const start = new Date();
-    start.setHours(0,0,0,0);
+    const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
 
-    const end = new Date();
-    end.setHours(23,59,59,999);
-
-
-    /* DAILY ORDERS */
+    const last6MonthsStart = new Date(monthStart);
+    last6MonthsStart.setMonth(last6MonthsStart.getMonth() - 5);
+    last6MonthsStart.setDate(1);
 
     const dailyOrders = await Sale.countDocuments({
-      createdAt: { $gte: start, $lte: end }
+      createdAt: { $gte: todayStart, $lte: todayEnd }
     });
-
-
-    /* TODAY SALES */
 
     const todaySales = await Sale.find({
-      createdAt: { $gte: start, $lte: end }
+      createdAt: { $gte: todayStart, $lte: todayEnd }
     });
 
-
-    /* PRODUCTS SOLD */
+    const totalProducts = await ProductModel.countDocuments();
+    const todayAddedProducts = await ProductModel.countDocuments({
+      createdAt: { $gte: todayStart, $lte: todayEnd }
+    });
+    const thisMonthAddedProducts = await ProductModel.countDocuments({
+      createdAt: { $gte: monthStart, $lte: todayEnd }
+    });
 
     let totalProductsSold = 0;
-
     todaySales.forEach((sale) => {
       sale.items.forEach((item) => {
         totalProductsSold += item.quantity;
       });
     });
 
+    const todayRevenue = todaySales.reduce(
+      (total, sale) => total + sale.finalAmount,
+      0
+    );
 
-    /* TODAY REVENUE */
+    const totalRevenueResult = await Sale.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: "$finalAmount" }
+        }
+      }
+    ]);
+    const totalRevenue = totalRevenueResult[0]?.totalRevenue || 0;
 
-    let todayRevenue = 0;
+    const totalProductsSoldResult = await Sale.aggregate([
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: null,
+          totalProductsSoldAll: { $sum: "$items.quantity" }
+        }
+      }
+    ]);
+    const totalProductsSoldAll = totalProductsSoldResult[0]?.totalProductsSoldAll || 0;
 
-    todaySales.forEach((sale) => {
-      todayRevenue += sale.finalAmount;
-    });
-
-
-    /* LOW STOCK PRODUCTS */
+    const monthProductsSoldResult = await Sale.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: monthStart, $lte: todayEnd }
+        }
+      },
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: null,
+          productsSoldThisMonth: { $sum: "$items.quantity" }
+        }
+      }
+    ]);
+    const productsSoldThisMonth = monthProductsSoldResult[0]?.productsSoldThisMonth || 0;
 
     const lowStockProducts = await ProductModel.find({
       $expr: { $lte: ["$stockQuantity", "$lowStockAlert"] }
     })
-    .select("name stockQuantity barcode")
-    .limit(5);
+      .select("name stockQuantity barcode")
+      .limit(5);
 
-
-    /* SALES CHART (LAST 7 DAYS) */
-
-    const last7Days = new Date();
-    last7Days.setDate(last7Days.getDate() - 7);
+    const last7Days = new Date(todayStart);
+    last7Days.setDate(last7Days.getDate() - 6);
 
     const salesChart = await Sale.aggregate([
       {
         $match: {
-          createdAt: { $gte: last7Days }
+          createdAt: { $gte: last7Days, $lte: todayEnd }
         }
       },
       {
@@ -196,41 +224,76 @@ export const getDashboardStats = async (req, res) => {
       }
     ]);
 
+    const addedProductsChart = await ProductModel.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: last6MonthsStart, $lte: todayEnd }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: "%Y-%m",
+              date: "$createdAt"
+            }
+          },
+          totalAdded: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
 
-    /* RECENT SALES */
+    const productsSoldChart = await Sale.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: last6MonthsStart, $lte: todayEnd }
+        }
+      },
+      { $unwind: "$items" },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: "%Y-%m",
+              date: "$createdAt"
+            }
+          },
+          totalSold: { $sum: "$items.quantity" }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
 
     const recentSales = await Sale.find()
       .sort({ createdAt: -1 })
       .limit(5)
       .select("billNumber finalAmount createdAt");
 
-
-    /* RESPONSE */
-
     res.status(200).json({
       success: true,
-
       summary: {
         dailyOrders,
+        totalProducts,
         totalProductsSold,
+        totalProductsSoldAll,
+        productsSoldThisMonth,
+        todayAddedProducts,
+        thisMonthAddedProducts,
         todayRevenue,
+        totalRevenue,
         lowStockItems: lowStockProducts.length
       },
-
       lowStockProducts,
-
       recentSales,
-
-      salesChart
-
+      salesChart,
+      addedProductsChart,
+      productsSoldChart
     });
-
   } catch (error) {
-
     res.status(500).json({
       success: false,
       message: error.message
     });
-
   }
 };

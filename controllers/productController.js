@@ -1,6 +1,5 @@
 import Product from "../models/ProductModel.js"
-
-
+import bwipjs from "bwip-js"
 
 // Add product
 export const addProduct = async (req, res) => {
@@ -69,32 +68,44 @@ export const addProduct = async (req, res) => {
 
 export const updateProduct = async (req, res) => {
   try {
-
     const { id } = req.params;
+    const { barcode } = req.body;
 
-    const product = await Product.findByIdAndUpdate(
-      id,
-      req.body,
-      { new: true }
-    );
+    if (barcode) {
+      const existingProduct = await Product.findOne({
+        barcode,
+        _id: { $ne: id },
+      });
+
+      if (existingProduct) {
+        return res.status(400).json({
+          success: false,
+          message: "Another product already uses this barcode",
+        });
+      }
+    }
+
+    const product = await Product.findByIdAndUpdate(id, req.body, {
+      new: true,
+      runValidators: true,
+    });
 
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: "Product not found"
+        message: "Product not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "Product updated successfully",
-      product
+      product,
     });
-
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -172,7 +183,29 @@ export const getProducts = async (req,res) => {
 
 }
 
+export const getProductById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = await Product.findById(id);
 
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      product,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 
 // Get product by barcode (scanner)
 export const getProductByBarcode = async (req, res) => {
@@ -201,10 +234,6 @@ export const getProductByBarcode = async (req, res) => {
     });
   }
 };
-
-
-import bwipjs from "bwip-js"
-
 
 
 // export const generateBarcode = async (req,res)=>{

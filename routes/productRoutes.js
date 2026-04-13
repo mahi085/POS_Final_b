@@ -5,6 +5,7 @@ import {
   deleteProduct,
   searchProducts,
   getProductByBarcode,
+  getProductById,
   getProducts,
   generateBarcodeImage
 } from "../controllers/productController.js";
@@ -22,5 +23,6 @@ router.get("/getAllProduct", getProducts)
 
 router.get("/barcode/:barcode", getProductByBarcode);
 router.get("/generateBarcode/:barcode", generateBarcodeImage);
+router.get("/get/:id", getProductById);
 
 export default router;
