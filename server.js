@@ -16,7 +16,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      "https://pos-final-f-7nmd.onrender.com",
+      "https://pos-final-f-7nmd.onrender.com/",
       "srv-d7efe628qa3s73bvjieg"
     ],
     credentials: true,
